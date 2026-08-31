@@ -1,0 +1,112 @@
+{
+  "data": {
+    "$type": "com.linkedin.restli.common.CollectionResponse",
+    "*elements": ["urn:li:fsd_profile:ACoAAAExample"]
+  },
+  "included": [
+    {
+      "$type": "com.linkedin.voyager.dash.identity.profile.Profile",
+      "entityUrn": "urn:li:fsd_profile:ACoAAAExample",
+      "publicIdentifier": "ada-lovelace",
+      "firstName": "Ada",
+      "lastName": "Lovelace",
+      "headline": "Mathematician and first programmer",
+      "summary": "Worked on Charles Babbage's Analytical Engine.",
+      "geoLocationName": "London, England",
+      "industry": "Research",
+      "profilePicture": {
+        "displayImageReference": {
+          "vectorImage": {
+            "rootUrl": "https://media.licdn.com/dms/image/D5603AQExample/profile-displayphoto-shrink_",
+            "artifacts": [
+              {
+                "width": 200,
+                "height": 200,
+                "fileIdentifyingUrlPathSegment": "200_200/0/1?e=1&v=beta&t=small",
+                "expiresAt": 1900000000000
+              },
+              {
+                "width": 800,
+                "height": 800,
+                "fileIdentifyingUrlPathSegment": "800_800/0/1?e=1&v=beta&t=large",
+                "expiresAt": 1900000000000
+              }
+            ]
+          }
+        }
+      },
+      "backgroundImage": {
+        "com.linkedin.common.VectorImage": {
+          "rootUrl": "https://media.licdn.com/dms/image/D5616AQExample/profile-displaybackgroundimage-shrink_",
+          "artifacts": [
+            {
+              "width": 1400,
+              "height": 350,
+              "fileIdentifyingUrlPathSegment": "1400_350/0/1?e=1&v=beta&t=bg"
+            }
+          ]
+        }
+      },
+      "*profilePositions": ["urn:li:fsd_position:1", "urn:li:fsd_position:2"],
+      "*profileEducations": ["urn:li:fsd_education:1"],
+      "*profileSkills": ["urn:li:fsd_skill:1", "urn:li:fsd_skill:2"],
+      "*profileCertifications": ["urn:li:fsd_certification:1"],
+      "*profileLanguages": ["urn:li:fsd_language:1"]
+    },
+    {
+      "$type": "com.linkedin.voyager.dash.identity.profile.Position",
+      "entityUrn": "urn:li:fsd_position:2",
+      "title": "Analyst",
+      "companyName": "Early Computing Lab",
+      "locationName": "London",
+      "description": "Notes on the engine.",
+      "dateRange": {
+        "start": { "year": 1842, "month": 1 },
+        "end": { "year": 1843, "month": 12 }
+      }
+    },
+    {
+      "$type": "com.linkedin.voyager.dash.identity.profile.Position",
+      "entityUrn": "urn:li:fsd_position:1",
+      "title": "Collaborator",
+      "companyName": "Analytical Engine Project",
+      "dateRange": {
+        "start": { "year": 1843, "month": 1 }
+      }
+    },
+    {
+      "$type": "com.linkedin.voyager.dash.identity.profile.Education",
+      "entityUrn": "urn:li:fsd_education:1",
+      "schoolName": "Home education",
+      "degreeName": "Private study",
+      "fieldOfStudy": "Mathematics",
+      "dateRange": {
+        "start": { "year": 1828 },
+        "end": { "year": 1835 }
+      }
+    },
+    {
+      "$type": "com.linkedin.voyager.dash.identity.profile.Skill",
+      "entityUrn": "urn:li:fsd_skill:1",
+      "name": "Mathematics"
+    },
+    {
+      "$type": "com.linkedin.voyager.dash.identity.profile.Skill",
+      "entityUrn": "urn:li:fsd_skill:2",
+      "name": "Programming"
+    },
+    {
+      "$type": "com.linkedin.voyager.dash.identity.profile.Certification",
+      "entityUrn": "urn:li:fsd_certification:1",
+      "name": "Fellow",
+      "authority": "Royal Society",
+      "issuedOn": { "year": 1843, "month": 6 }
+    },
+    {
+      "$type": "com.linkedin.voyager.dash.identity.profile.Language",
+      "entityUrn": "urn:li:fsd_language:1",
+      "name": "English",
+      "proficiency": "NATIVE_OR_BILINGUAL"
+    }
+  ]
+}
