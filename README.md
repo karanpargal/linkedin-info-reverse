@@ -6,6 +6,8 @@ It talks to LinkedIn the same way linkedin.com does: **direct HTTP calls to Voya
 
 A cookie-free guest path (public JSON-LD) is used automatically when the Voyager session is missing or dead.
 
+**Live API (HTTPS):** [https://web-production-96907.up.railway.app/docs](https://web-production-96907.up.railway.app/docs)
+
 > This is a research / challenge build. It uses LinkedIn’s **undocumented internal API**. That violates LinkedIn’s User Agreement. Do not run it as a product, at scale, or against people who have not consented. Your account can be restricted.
 
 ## Features
@@ -17,6 +19,8 @@ A cookie-free guest path (public JSON-LD) is used automatically when the Voyager
 - Secrets stay in environment variables, never in the repo
 
 ## Demo SS
+
+Public Swagger: [https://web-production-96907.up.railway.app/docs](https://web-production-96907.up.railway.app/docs)
 
 `GET /v1/profile?url=https://www.linkedin.com/in/karan-pargal/` via Swagger at `/docs`. HTTP 200, `"source": "voyager"`.
 
@@ -238,6 +242,8 @@ Missing fields are `null` or `[]`. Dates are `YYYY-MM` when a month is present, 
 An in-process limiter caps lookups at 6/minute and 40/hour, serializes LinkedIn calls, and caches successful profiles.
 
 ## Deploy on Railway
+
+This instance is live at [https://web-production-96907.up.railway.app/docs](https://web-production-96907.up.railway.app/docs).
 
 Railway (2026) uses **Railpack**. This app lives in `app/main.py`, so it will **not** auto-start as `main:app`. The repo includes a `Procfile`:
 
