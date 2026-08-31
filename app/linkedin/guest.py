@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def fetch_guest_profile(public_id: str) -> Profile:
     url = canonical_profile_url(public_id)
     last_error: Exception | None = None
-    for attempt in range(3):
+    for attempt in range(2):
         try:
             html, final_url = _get_public_html(url)
         except (LinkedInBlocked, VoyagerUnavailable) as exc:

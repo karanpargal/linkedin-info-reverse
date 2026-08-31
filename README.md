@@ -16,12 +16,20 @@ A cookie-free guest path (public JSON-LD) is used automatically when the Voyager
 - Optional `API_KEY` so a public URL cannot drain your LinkedIn session
 - Secrets stay in environment variables, never in the repo
 
+## Demo SS
+
+`GET /v1/profile?url=https://www.linkedin.com/in/karan-pargal/` via Swagger at `/docs`. HTTP 200, `"source": "voyager"`.
+
+![Demo screenshot of a successful Voyager profile response in Swagger UI](docs/demo-ss.png)
+
 ## How it works
 
 ```
-Client  →  FastAPI  →  Voyager (li_at + JSESSIONID)
-                         ↓ 401 / 403 / 999 / unconfigured
-                       Public /in/{slug} HTML → JSON-LD Person
+Client  →  FastAPI  →  Voyager REST dash/profiles
+                         ↓ interstitial / 400
+                       Authenticated /in/{slug} (embedded bpr-guid JSON)
+                         ↓ still failing, and not HTTP 999
+                       Public /in/{slug} JSON-LD
 ```
 
 ### Voyager (primary)
@@ -44,7 +52,7 @@ Authentication is a normal member session:
 
 Requests go through **`curl_cffi` with Chrome TLS impersonation**. LinkedIn fronts Voyager with PerimeterX; a default Python TLS fingerprint is a common HTTP 999. The User-Agent is **not** overridden so it stays consistent with the impersonated handshake.
 
-Decoration IDs rotate (wrong suffix → HTTP 400). The client walks a short list (`FullProfileWithEntities-96` → `-93` → `-91` → `-86` → `WebTopCardCore-16`), then tries GraphQL `queryName=voyagerIdentityDashProfiles` with `(vanityName:{slug})`. The legacy `identity/profiles/{id}/profileView` endpoint is a last resort; it currently returns **HTTP 410**.
+Decoration IDs rotate (wrong suffix → HTTP 400). The client tries `FullProfileWithEntities-96`, then `-93`, then `WebTopCardCore-16`. It does **not** call GraphQL or the retired `profileView` endpoint on the happy path — those extra round-trips were burning sessions.
 
 The body is REST.li **normalized JSON**: a `data` graph plus an `included[]` array. `*field` keys are URN pointers. The parser indexes `included` by `entityUrn` and maps `$type` suffixes:
 
@@ -79,28 +87,46 @@ cp .env.example .env
 
 ### Capture cookies (required for full profiles)
 
-1. Sign in to [linkedin.com](https://www.linkedin.com) in Chrome.
-2. Open DevTools → **Application** → **Cookies** → `https://www.linkedin.com`.
-3. Copy **`li_at`** and **`JSESSIONID`** into `.env`:
+A two-cookie jar (`li_at` + `JSESSIONID` only) often dies after **one or two** Voyager calls. Copy the **full** cookie set from the same logged-in tab.
+
+1. Sign in at [linkedin.com](https://www.linkedin.com) and open **Feed** (`/feed/`) so `JSESSIONID` is set.
+2. DevTools → **Network** → click any `www.linkedin.com` request → **Request Headers** → copy the entire `Cookie:` value into `LINKEDIN_EXTRA_COOKIES`.
+3. Also set `LINKEDIN_LI_AT` and `LINKEDIN_JSESSIONID` from that same header (or Application → Cookies).
 
 ```
 LINKEDIN_LI_AT=AQED...
 LINKEDIN_JSESSIONID="ajax:1234567890123456789"
+LINKEDIN_EXTRA_COOKIES=bcookie=...; lidc=...; li_rm=...; liap=true; _px3=...
 ```
 
-Keep the quotes around `JSESSIONID` if Chrome shows them. The client strips them only for the `csrf-token` header.
+Keep the quotes around `JSESSIONID` if Chrome shows them. CSRF is always derived from the **live** `JSESSIONID` in the cookie jar (including values LinkedIn rotates via `Set-Cookie`).
 
 Optional:
 
 ```
-# Extra cookies (bcookie, lidc, li_rm, PerimeterX _px3, …) as a raw Cookie header
-LINKEDIN_EXTRA_COOKIES=bcookie=...; lidc=...
+# Residential proxy — still plain HTTP, no browser
+LINKEDIN_PROXY=http://user:pass@host:port
 
 # Protect the public API
 API_KEY=choose-a-long-random-string
 ```
 
-`li_at` typically lasts months. It dies on password change, checkpoint, or LinkedIn invalidating the session. There is **no email/password auto-login** — that flow hits CAPTCHA from datacenter IPs.
+There is **no email/password auto-login**. That flow hits CAPTCHA from datacenter IPs.
+
+### How to get more than one profile per session
+
+LinkedIn treats `/voyager/api` from a datacenter TLS client as automation. This service stays **HTTP-only** (no Playwright). Durability comes from looking like one slow logged-in tab:
+
+- ~3.5s jitter between LinkedIn calls (do not lower `LINKEDIN_MIN_INTERVAL` under 2)
+- cap of 6 lookups/minute and 40/hour
+- in-memory cache (10 minutes) so retries do not re-hit LinkedIn
+- `/health` caches the `/voyager/api/me` probe for 2 minutes
+- one Voyager decoration per profile (no GraphQL / `profileView` waterfall)
+- one retry if Voyager returns an HTML interstitial
+- authenticated `/in/{slug}` page parse (`<code id="bpr-guid-…">`) before guest JSON-LD
+- guest path is skipped after HTTP 999 so we do not pile on blocks
+
+Even then, expect **a handful to a few dozen** successful Voyager reads per cookie lifetime on a residential IP — not PhantomBuster-scale. A residential `LINKEDIN_PROXY` is the single biggest upgrade if you are deploying on Railway.
 
 ### Run locally
 
@@ -134,7 +160,7 @@ Tests cover URL parsing, Voyager `$type` mapping, guest JSON-LD, and HTTP error 
 
 ### `GET /health`
 
-Liveness. If cookies are configured, probes `GET /voyager/api/me`.
+Liveness. If cookies are configured, probes `GET /voyager/api/me` at most once every two minutes.
 
 ```json
 {
@@ -209,7 +235,7 @@ Missing fields are `null` or `[]`. Dates are `YYYY-MM` when a month is present, 
 | 502 | LinkedIn blocked the request (HTTP 999 / authwall) on both tiers |
 | 503 | Voyager session unavailable and guest fallback also failed |
 
-An in-process limiter caps concurrent LinkedIn work and request rate so a public deploy cannot immediately burn the session.
+An in-process limiter caps lookups at 6/minute and 40/hour, serializes LinkedIn calls, and caches successful profiles.
 
 ## Deploy on Railway
 
@@ -231,6 +257,8 @@ railway login
 railway init --name linkedin-profile-api
 railway variable set LINKEDIN_LI_AT=...
 railway variable set LINKEDIN_JSESSIONID=...
+railway variable set LINKEDIN_EXTRA_COOKIES=...
+railway variable set LINKEDIN_PROXY=...   # optional residential proxy
 railway variable set API_KEY=...
 railway up
 railway domain
@@ -253,23 +281,28 @@ app/
   models.py               Response schema
   linkedin/
     client.py             curl_cffi Voyager session
-    voyager.py            dash/profiles + decoration walk
+    voyager.py            dash/profiles (one decoration, 400 walk only)
+    embed.py              authenticated /in/{slug} bpr-guid payloads
     parsers.py            normalized JSON → Profile
     guest.py              public JSON-LD fallback
     urls.py               /in/{slug} extractor
-    service.py            tiered resolver
-    limiter.py            in-process rate limit
+    service.py            cache + tiered resolver
+    limiter.py            per-minute / per-hour cap
 tests/
 ```
 
 ## Known limitations
 
-- Voyager is unofficial. Decoration IDs and GraphQL `queryId` hashes rotate without notice.
-- `li_at` expires. There is no password re-login (CAPTCHA / checkpoint from cloud IPs).
-- Railway (and most PaaS) IPs are frequently 999’d. Guest data is a partial subset.
-- You only see what the logged-in member is allowed to see. Private profiles stay private.
-- Full-profile decorations have historically capped experience lists (~18 roles). Extra sections are best-effort.
-- Guest JSON-LD is missing on many profiles and after an authwall.
+- This backend uses a **new LinkedIn account's session cookies**. LinkedIn treats that as suspicious: Voyager calls often hit a security checkpoint (HTTP 302 / `"session": "dead"`). When that happens, open `/feed/` in a browser, complete the challenge, and **rotate** `li_at`, `JSESSIONID`, `bcookie`, and `lidc` in `.env`, then restart. There is no automatic re-login.
+- Still HTTP-only. PhantomBuster lasts longer because it drives a real browser plus residential IPs. We cannot do that under the "no browser" constraint.
+- A thin cookie jar (`li_at` + `JSESSIONID` only) is often challenged after 1–2 Voyager calls. Use `LINKEDIN_EXTRA_COOKIES`.
+- LinkedIn feature-restricts accounts around tens of automated profile views per day. The limiter is there to stay under that, not to beat it.
+- Railway (and most PaaS) IPs are frequently 999'd. `curl_cffi` fixes TLS fingerprinting, not IP reputation. Use `LINKEDIN_PROXY`.
+- Voyager is unofficial. Decoration IDs rotate without notice.
+- `li_at` dies on checkpoint / password change. There is no password re-login.
+- You only see what the logged-in member is allowed to see.
+- Full-profile decorations have historically capped experience lists (~18 roles).
+- Guest JSON-LD is thin and often authwalled.
 - LinkedIn ToS forbid this. Treat it as a take-home / research artifact, not a SaaS.
 
 ## License

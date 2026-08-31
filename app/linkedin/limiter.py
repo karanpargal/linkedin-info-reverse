@@ -10,22 +10,33 @@ from app.linkedin.errors import RateLimited
 class InProcessLimiter:
     """Keeps a public deployment from burning a LinkedIn session."""
 
-    def __init__(self, max_per_minute: int = 12, max_concurrent: int = 1) -> None:
+    def __init__(
+        self,
+        max_per_minute: int = 6,
+        max_per_hour: int = 40,
+        max_concurrent: int = 1,
+    ) -> None:
         self.max_per_minute = max_per_minute
-        self._times: deque[float] = deque()
+        self.max_per_hour = max_per_hour
+        self._minute: deque[float] = deque()
+        self._hour: deque[float] = deque()
         self._lock = threading.Lock()
         self._busy = threading.Semaphore(max_concurrent)
 
     def acquire(self) -> None:
         with self._lock:
             now = time.monotonic()
-            cutoff = now - 60
-            while self._times and self._times[0] < cutoff:
-                self._times.popleft()
-            if len(self._times) >= self.max_per_minute:
-                raise RateLimited("Too many profile requests; try again shortly")
-            self._times.append(now)
-        if not self._busy.acquire(blocking=True, timeout=30):
+            while self._minute and self._minute[0] < now - 60:
+                self._minute.popleft()
+            while self._hour and self._hour[0] < now - 3600:
+                self._hour.popleft()
+            if len(self._minute) >= self.max_per_minute:
+                raise RateLimited("Too many profile requests this minute; wait and retry")
+            if len(self._hour) >= self.max_per_hour:
+                raise RateLimited("Hourly LinkedIn lookup cap reached; try later")
+            self._minute.append(now)
+            self._hour.append(now)
+        if not self._busy.acquire(blocking=True, timeout=45):
             raise RateLimited("A profile fetch is already in progress")
 
     def release(self) -> None:

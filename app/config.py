@@ -13,8 +13,10 @@ class Settings(BaseSettings):
     linkedin_li_at: str = ""
     linkedin_jsessionid: str = ""
     linkedin_extra_cookies: str = ""
+    linkedin_proxy: str = ""
     api_key: str = ""
-    linkedin_min_interval: float = 1.2
+    linkedin_min_interval: float = 3.5
+    linkedin_cache_ttl: float = 600.0
 
 
 @lru_cache
